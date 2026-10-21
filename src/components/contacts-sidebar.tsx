@@ -1,9 +1,10 @@
-"use client";
-
 import { memo } from "react";
+import { Ban, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { avatarDataUri } from "../lib/avatar";
+import type { UserProfile } from "../lib/profile";
 import { cn } from "@/lib/utils";
-import { X, Ban } from "lucide-react";
+import { BadgeStack } from "./profile-badges";
 
 export interface Contact {
   id: string;
@@ -13,6 +14,7 @@ export interface Contact {
   timestamp: string;
   unread?: number;
   online?: boolean;
+  profile?: UserProfile;
 }
 
 interface ContactItemProps {
@@ -22,77 +24,136 @@ interface ContactItemProps {
   onSelectContact: (contactId: string) => void;
   onDeleteContact: (contactId: string) => void;
   onBlockContact: (contactId: string) => void;
+  language?: "ru" | "en";
   t: (key: string) => string;
 }
 
-const ContactItem = memo(({ contact, selectedContactId, action, onSelectContact, onDeleteContact, onBlockContact, t }: ContactItemProps) => {
-  const getActionText = (action: string) => {
-    switch (action) {
-      case 'typing': return '✍️ Печатает...';
-      case 'uploading': return '📎 Загружает файл...';
-      case 'recording': return '🎙️ Записывает аудио...';
-      default: return '';
-    }
-  };
+const ContactItem = memo(
+  ({
+    contact,
+    selectedContactId,
+    action,
+    onSelectContact,
+    onDeleteContact,
+    onBlockContact,
+    language = "ru",
+    t,
+  }: ContactItemProps) => {
+    const getActionText = (value: string) => {
+      switch (value) {
+        case "typing":
+          return t("typing");
+        case "uploading":
+          return t("uploadingStatus");
+        case "recording":
+          return t("recordingStatus");
+        default:
+          return "";
+      }
+    };
 
-  const actionText = action ? getActionText(action) : '';
+    const actionText = action ? getActionText(action) : "";
+    const isSelected = selectedContactId === contact.id;
 
-  return (
-    <div className="group relative">
-      <button
-        onClick={() => onSelectContact(contact.id)}
-        className={cn(
-          "flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-sidebar-accent",
-          selectedContactId === contact.id && "bg-sidebar-accent"
-        )}
-      >
-        <div className="relative">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={contact.avatar} alt={contact.name} />
-            <AvatarFallback className="bg-muted text-muted-foreground">
-              {contact.name.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          {contact.online && (
-            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-sidebar bg-green-500" />
+    return (
+      <div className="group relative">
+        <button
+          type="button"
+          onClick={() => onSelectContact(contact.id)}
+          className={cn(
+            "relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition duration-200",
+            isSelected
+              ? "bg-gradient-to-r from-violet-500/15 via-indigo-500/10 to-transparent ring-1 ring-violet-400/20"
+              : "hover:bg-foreground/[0.04]",
           )}
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-sidebar-foreground">{contact.name}</span>
-            <span className="text-xs text-muted-foreground">{contact.timestamp}</span>
+        >
+          {isSelected && (
+            <span className="absolute left-0 top-1/2 h-7 w-0.5 -translate-y-1/2 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
+          )}
+
+          <div className="relative shrink-0">
+            <Avatar className="h-11 w-11 ring-2 ring-foreground/5">
+              <AvatarImage
+                src={contact.avatar || avatarDataUri(contact.name)}
+                alt={contact.name}
+              />
+              <AvatarFallback className="bg-gradient-to-br from-violet-500 to-cyan-400 text-sm font-semibold text-white">
+                {contact.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {contact.online && (
+              <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-sidebar bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+            )}
           </div>
-          <p className="truncate text-sm text-muted-foreground">{contact.lastMessage}</p>
-          {actionText && (
-            <p className="text-xs text-blue-500 italic animate-pulse">{actionText}</p>
-          )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className={cn(
+                    "truncate text-sm font-medium",
+                    isSelected ? "text-foreground" : "text-foreground/90",
+                  )}
+                >
+                  {contact.name}
+                </span>
+                <BadgeStack profile={contact.profile} language={language} limit={2} />
+              </div>
+              <span className="shrink-0 text-[11px] text-muted-foreground/60">
+                {contact.timestamp}
+              </span>
+            </div>
+            <div className="mt-0.5 flex items-center gap-2">
+              <p
+                className={cn(
+                  "truncate text-xs",
+                  actionText
+                    ? "text-violet-600 dark:text-violet-300"
+                    : "text-muted-foreground/70",
+                )}
+              >
+                {actionText || contact.lastMessage}
+              </p>
+              {!!contact.unread && contact.unread > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-cyan-400 px-1.5 text-[10px] font-bold text-white shadow-glow-sm">
+                  {contact.unread}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onBlockContact(contact.id);
+            }}
+            className="rounded-lg bg-black/40 p-1.5 text-muted-foreground backdrop-blur-md transition hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-300"
+            aria-label={t("block")}
+            title={t("block")}
+          >
+            <Ban className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteContact(contact.id);
+            }}
+            className="rounded-lg bg-black/40 p-1.5 text-muted-foreground backdrop-blur-md transition hover:bg-foreground/10 hover:text-foreground"
+            aria-label={t("deleteContact")}
+            title={t("deleteContact")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
-        {contact.unread && contact.unread > 0 && (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-medium text-primary-foreground">
-            {contact.unread}
-          </span>
-        )}
-      </button>
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={(e) => { e.stopPropagation(); onBlockContact(contact.id); }}
-          className="p-1 rounded-full hover:bg-sidebar-accent"
-          aria-label={t("block")}
-          title={t("block")}
-        >
-          <Ban className="h-4 w-4 text-red-500" />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDeleteContact(contact.id); }}
-          className="p-1 rounded-full hover:bg-sidebar-accent"
-          aria-label={t("deleteContact")}
-        >
-          <X className="h-4 w-4 text-muted-foreground" />
-        </button>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
+
 ContactItem.displayName = "ContactItem";
 
 interface ContactsSidebarProps {
@@ -102,6 +163,7 @@ interface ContactsSidebarProps {
   onDeleteContact: (contactId: string) => void;
   onBlockContact: (contactId: string) => void;
   contactActions?: Record<string, string>;
+  language?: "ru" | "en";
   t: (key: string) => string;
 }
 
@@ -112,14 +174,26 @@ export function ContactsSidebar({
   onDeleteContact,
   onBlockContact,
   contactActions = {},
+  language = "ru",
   t,
 }: ContactsSidebarProps) {
-  return (
-    <div className="flex h-full flex-col border-r border-border bg-sidebar">
-      <div className="border-b border-border p-4">
-        <h2 className="text-lg font-semibold text-sidebar-foreground">{t("chats")}</h2>
+  if (contacts.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-foreground/10 bg-foreground/5 text-2xl">
+          👻
+        </div>
+        <p className="text-sm font-medium text-foreground">{t("noContactsTitle")}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {t("noContactsText")}
+        </p>
       </div>
-      <div className="flex-1 overflow-y-auto">
+    );
+  }
+
+  return (
+    <div className="no-scrollbar h-full overflow-y-auto">
+      <div className="space-y-1">
         {contacts.map((contact) => (
           <ContactItem
             key={contact.id}
@@ -129,6 +203,7 @@ export function ContactsSidebar({
             onSelectContact={onSelectContact}
             onDeleteContact={onDeleteContact}
             onBlockContact={onBlockContact}
+            language={language}
             t={t}
           />
         ))}

@@ -3,6 +3,7 @@ import { useTheme } from 'next-themes';
 import { useLanguage } from '../contexts/LanguageContext';
 import { STORAGE_KEYS } from '../lib/constants';
 import { MyServerApi } from '../lib/apiClient';
+import { createDefaultProfile, loadProfile, saveProfile, type UserProfile } from '../lib/profile';
 import { 
     generateKeyPair, 
     exportPublicKeyJwk, 
@@ -13,7 +14,6 @@ import {
     decryptMessage, 
     encryptFile, 
     base64ToArrayBuffer, 
-    arrayBufferToBase64, 
     EncryptedPackage,
     encryptBackup,
     decryptBackup
@@ -26,7 +26,9 @@ export interface Contact {
     lastMessage: string;
     timestamp: string;
     online: boolean;
+    unread?: number;
     action?: string | null;
+    profile?: UserProfile;
 }
 
 export interface Message {
@@ -40,6 +42,8 @@ export interface Message {
             name: string;
             type: string;
             size: number;
+            unencrypted?: boolean;
+            duration?: number;
         };
         file_url?: string;
     };
@@ -55,6 +59,7 @@ export function useMyServerChat(onSwitchMode: () => void) {
     const [myDeviceId, setMyDeviceId] = useState<string | null>(null);
     const [myNickname, setMyNickname] = useState<string>('');
     const [myAvatar, setMyAvatar] = useState<string | null>(null);
+    const [myProfile, setMyProfile] = useState<UserProfile>(() => createDefaultProfile('', null));
     const [recipientId, setRecipientId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [keyPair, setKeyPair] = useState<CryptoKeyPair | null>(null);
@@ -103,6 +108,18 @@ export function useMyServerChat(onSwitchMode: () => void) {
                     setMyNickname(profile.nickname);
                     setMyAvatar(profile.avatar);
 
+                    const localProfile = loadProfile(
+                        storedDeviceId,
+                        createDefaultProfile(profile.nickname, profile.avatar),
+                    );
+                    const mergedProfile = {
+                        ...localProfile,
+                        nickname: profile.nickname,
+                        avatar: profile.avatar,
+                    };
+                    setMyProfile(mergedProfile);
+                    saveProfile(storedDeviceId, mergedProfile);
+
                     try {
                         const blockedData = await MyServerApi.getBlocked(storedDeviceId);
                         setBlockedList(blockedData.blocked);
@@ -143,6 +160,18 @@ export function useMyServerChat(onSwitchMode: () => void) {
 
             const profile = await MyServerApi.getNickname(data.deviceId);
             setMyAvatar(profile.avatar);
+
+            const localProfile = loadProfile(
+                data.deviceId,
+                createDefaultProfile(data.nickname, profile.avatar),
+            );
+            const mergedProfile = {
+                ...localProfile,
+                nickname: data.nickname,
+                avatar: profile.avatar,
+            };
+            setMyProfile(mergedProfile);
+            saveProfile(data.deviceId, mergedProfile);
             try {
                 const blockedData = await MyServerApi.getBlocked(data.deviceId);
                 setBlockedList(blockedData.blocked);
@@ -257,7 +286,7 @@ export function useMyServerChat(onSwitchMode: () => void) {
         }
     }, [recipientId, keyPair, myDeviceId, isSendingText]);
 
-    const decryptFileData = async (encryptedData: EncryptedPackage): Promise<ArrayBuffer> => {
+    const decryptFileData = useCallback(async (encryptedData: EncryptedPackage): Promise<ArrayBuffer> => {
         if (!keyPair) throw new Error("No key pair");
         if (encryptedData.unencrypted) {
             return typeof encryptedData.ciphertext === "string"
@@ -289,9 +318,9 @@ export function useMyServerChat(onSwitchMode: () => void) {
             ciphertext
         );
         return decrypted;
-    };
+    }, [keyPair]);
 
-    const downloadDecryptedFile = async (encryptedData: EncryptedPackage, metadata: { name: string, type: string, size: number, unencrypted?: boolean }) => {
+    const downloadDecryptedFile = useCallback(async (encryptedData: EncryptedPackage, metadata: { name: string, type: string, size: number, unencrypted?: boolean }) => {
         const decryptedBuffer = await decryptFileData(encryptedData);
         const blob = new Blob([decryptedBuffer], { type: metadata.type });
         const url = URL.createObjectURL(blob);
@@ -300,9 +329,9 @@ export function useMyServerChat(onSwitchMode: () => void) {
         a.download = metadata.name;
         a.click();
         URL.revokeObjectURL(url);
-    };
+    }, [decryptFileData]);
 
-    const sendFileMessage = useCallback(async (file: File) => {
+    const sendFileMessage = useCallback(async (file: File, options?: { duration?: number }) => {
         if (!recipientId || !keyPair) return;
         if (!myDeviceId) return;
         if (isSendingFile) return;
@@ -317,21 +346,22 @@ export function useMyServerChat(onSwitchMode: () => void) {
         try {
             const { publicKey: recipientJwk } = await MyServerApi.getPublicKey(recipientId);
             const recipientPubKey = await importPublicKeyJwk(recipientJwk);
-            let encrypted, metadata;
-            if (file.type.startsWith('audio/')) {
-                const fileBuffer = await file.arrayBuffer();
-                encrypted = { ciphertext: arrayBufferToBase64(fileBuffer), iv: [], ephemeralPublicKey: {} as any, unencrypted: true };
-                metadata = { name: file.name, type: file.type, size: file.size, unencrypted: true };
-            } else {
-                const fileBuffer = await file.arrayBuffer();
-                encrypted = await encryptFile(recipientPubKey, fileBuffer);
-                metadata = { name: file.name, type: file.type, size: file.size };
-            }
+            const fileBuffer = await file.arrayBuffer();
+            const encrypted = await encryptFile(recipientPubKey, fileBuffer);
+            const metadata = {
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                size: file.size,
+                duration: options?.duration,
+            };
             await MyServerApi.sendMessage(recipientId, encrypted, metadata, myDeviceId);
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const dateStr = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-            const localPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+            const localPreviewUrl =
+                file.type.startsWith('image/') || file.type.startsWith('audio/')
+                    ? URL.createObjectURL(file)
+                    : undefined;
             const newMsg = {
                 id: Date.now().toString(),
                 senderId: myDeviceId,
@@ -342,7 +372,7 @@ export function useMyServerChat(onSwitchMode: () => void) {
                 date: dateStr,
             };
             setMessages(prev => [...prev, newMsg]);
-            setContacts(prev => prev.map((c: Contact) => c.id === recipientId ? { ...c, lastMessage: `📎 ${file.name}`, timestamp: timeStr } : c));
+            setContacts(prev => prev.map((c: Contact) => c.id === recipientId ? { ...c, lastMessage: file.type.startsWith('audio/') ? '🎤 Голосовое сообщение' : `📎 ${file.name}`, timestamp: timeStr } : c));
         } catch (err) { console.error(err); alert("Send failed"); }
         finally {
             setIsSendingFile(false);
@@ -375,9 +405,15 @@ export function useMyServerChat(onSwitchMode: () => void) {
     
     const updateNickname = async (newNickname: string) => {
         if (!myDeviceId || !newNickname.trim()) return;
+        const trimmed = newNickname.trim();
         try {
-            await MyServerApi.updateNickname(myDeviceId, newNickname);
-            setMyNickname(newNickname);
+            await MyServerApi.updateNickname(myDeviceId, trimmed);
+            setMyNickname(trimmed);
+            setMyProfile(prev => {
+                const next = { ...prev, nickname: trimmed };
+                saveProfile(myDeviceId, next);
+                return next;
+            });
         } catch (err) { console.error(err); }
     };
     
@@ -386,7 +422,21 @@ export function useMyServerChat(onSwitchMode: () => void) {
         try {
             await MyServerApi.updateAvatar(myDeviceId, newAvatar);
             setMyAvatar(newAvatar);
+            setMyProfile(prev => {
+                const next = { ...prev, avatar: newAvatar };
+                saveProfile(myDeviceId, next);
+                return next;
+            });
         } catch (err) { console.error(err); }
+    };
+
+    const updateProfile = (patch: Partial<Omit<UserProfile, 'nickname' | 'avatar'>>) => {
+        if (!myDeviceId) return;
+        setMyProfile(prev => {
+            const next = { ...prev, ...patch };
+            saveProfile(myDeviceId, next);
+            return next;
+        });
     };
     
     const handleLogout = () => {
@@ -396,6 +446,7 @@ export function useMyServerChat(onSwitchMode: () => void) {
         setContacts([]);
         setMessages([]);
         setMyAvatar(null);
+        setMyProfile(createDefaultProfile('', null));
         setBlockedList([]);
         setRecipientId(null);
         setIsInitialized(false);
@@ -500,6 +551,7 @@ export function useMyServerChat(onSwitchMode: () => void) {
         myDeviceId,
         myNickname,
         myAvatar,
+        myProfile,
         recipientId,
         messages,
         contacts,
@@ -525,6 +577,7 @@ export function useMyServerChat(onSwitchMode: () => void) {
         handleSelectContact,
         updateNickname,
         updateAvatar,
+        updateProfile,
         handleLogout,
         blockContact,
         unblockContact,

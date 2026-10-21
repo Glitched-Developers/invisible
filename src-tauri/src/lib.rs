@@ -122,6 +122,48 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(SignalStore::default()))
+        .setup(|app| {
+            #[cfg(target_os = "windows")]
+            {
+                use tauri::Manager;
+
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.with_webview(|webview| unsafe {
+                        use webview2_com::Microsoft::Web::WebView2::Win32::{
+                            COREWEBVIEW2_PERMISSION_KIND_CAMERA,
+                            COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+                            COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                        };
+                        use webview2_com::PermissionRequestedEventHandler;
+
+                        let Ok(core) = webview.controller().CoreWebView2() else {
+                            return;
+                        };
+
+                        let mut token = 0;
+                        let handler =
+                            PermissionRequestedEventHandler::create(Box::new(|_, args| {
+                                let Some(args) = args else { return Ok(()) };
+
+                                let mut kind = Default::default();
+                                args.PermissionKind(&mut kind)?;
+
+                                if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE
+                                    || kind == COREWEBVIEW2_PERMISSION_KIND_CAMERA
+                                {
+                                    args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW)?;
+                                }
+
+                                Ok(())
+                            }));
+
+                        let _ = core.add_PermissionRequested(&handler, &mut token);
+                    });
+                }
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             signal_generate_identity,
             signal_generate_pre_keys,

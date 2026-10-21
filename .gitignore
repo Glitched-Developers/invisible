@@ -12,3 +12,7 @@ docker-compose.yml
 session-*
 MessengerServer/
 dist
+.env
+*.log
+.DS_Store
+Thumbs.db

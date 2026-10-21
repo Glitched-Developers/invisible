@@ -17,6 +17,7 @@ export interface FileMetadata {
     type: string;
     size: number;
     unencrypted?: boolean;
+    duration?: number;
 }
 
 export interface SendMessageBody {

@@ -2326,6 +2326,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-opener",
+ "webview2-com",
  "x25519-dalek",
 ]
 
