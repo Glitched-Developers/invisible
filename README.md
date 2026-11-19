@@ -9,7 +9,7 @@
 [![React](https://img.shields.io/badge/Frontend-React%2019-61DAFB?logo=react)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org)
 [![Rust](https://img.shields.io/badge/Backend-Rust-CE422B?logo=rust)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/Version-0.1.0-orange)](package.json)
+[![Version](https://img.shields.io/badge/Version-0.2.0-orange)](package.json)
 
 </div>
 
@@ -20,6 +20,33 @@
 **Invisible** is a cross-platform desktop messenger that takes your privacy so seriously it considered not having a README at all. Every message is end-to-end encrypted — meaning even *we* can't read what you're sending. (Plausible deniability: activated.)
 
 Built on top of [Tauri](https://tauri.app), it pairs a snappy **React + TypeScript** frontend with a **Rust** backend that handles the cryptographic heavy lifting. Think of it as Signal, but if Signal went to the gym and also learned Rust.
+
+---
+
+## 🕹️ Try the demo (no backend required)
+
+Demo mode is fully local. It does **not** contact the server, create real keys, or send messages over the network — perfect for a quick look at the interface.
+
+### Option 1 — download and run the desktop app
+
+1. Open the [latest release](https://github.com/Glitched-Developers/invisible/releases/latest).
+2. Download the installer for your OS:
+   - **Windows:** `Invisible_windows_*_x64-setup.exe` or `.msi`
+   - **Linux:** `.AppImage` or `.deb`
+3. Install, launch **Invisible**, and click **Demo mode** on the welcome screen.
+
+### Option 2 — run from source in your browser
+
+```bash
+git clone https://github.com/Glitched-Developers/invisible.git
+cd invisible
+npm install
+npm run demo
+```
+
+The demo opens at **http://localhost:1420**. Click **Demo mode**. This path needs only Node.js — no Rust, Tauri, `.env`, or backend.
+
+> The demo is a UI/UX preview. Real network messaging, key generation, and file transfer require the full desktop build and the [invisible-backend](https://github.com/Glitched-Developers/invisible-backend/).
 
 ---
 
@@ -49,7 +76,9 @@ Built on top of [Tauri](https://tauri.app), it pairs a snappy **React + TypeScri
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Full desktop setup
+
+Use this path for real messaging with the backend. For a quick demo, use [Try the demo](#-try-the-demo-no-backend-required) above — it needs no `.env` or Rust.
 
 ### Prerequisites
 

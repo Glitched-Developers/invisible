@@ -33,7 +33,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: app-v__VERSION__ # Действие автоматически заменит __VERSION__ на версию из package.json
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'Новый релиз приложения'
-          releaseDraft: true
+          releaseName: 'Invisible v__VERSION__'
+          releaseBody: |
+            Демо-режим работает без бэкенда: установите приложение, запустите Invisible и нажмите «Демо-режим».
+            Для реальной переписки нужен backend: https://github.com/Glitched-Developers/invisible-backend
+          releaseDraft: false
           prerelease: false
